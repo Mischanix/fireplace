@@ -303,12 +303,6 @@ class Step(IntEnum):
 	MAIN_START_TRIGGERS = 17
 
 
-class AuraType(IntEnum):
-	PLAY_AURA = 1
-	HAND_AURA = 2
-	PLAYER_AURA = 3
-
-
 class Rarity(IntEnum):
 	INVALID = 0
 	COMMON = 1
@@ -327,3 +321,17 @@ class Zone(IntEnum):
 	REMOVEDFROMGAME = 5
 	SETASIDE = 6
 	SECRET = 7
+
+
+##
+# Fireplace enums
+
+class AuraType(IntEnum):
+	PLAY_AURA = 1
+	HAND_AURA = 2
+	PLAYER_AURA = 3
+
+
+class Hostility(IntEnum):
+	FRIENDLY = 1
+	ENEMY = 2

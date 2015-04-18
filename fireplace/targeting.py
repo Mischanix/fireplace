@@ -2,6 +2,7 @@
 Targeting logic
 """
 
+import operator
 from .enums import CardType, Race, PlayReq
 
 
@@ -76,28 +77,34 @@ def isValidTarget(self, target, requirements=None):
 	return True
 
 
+
 class Selector:
 	def __init__(self, *args):
 		self.selectors = []
 		for arg in args:
-			self.selectors.append(arg)
+			self.selectors.append((operator._or, arg))
 
 	def __or__(self, selector):
 		self.selectors += selector.selectors
 		return self
 
-	def _eval_selector(self, selector, entity):
+	def __add__(self, selector):
+		self._and.append(selector.selectors)
+
+	def _eval_selector(self, selector, origin, entity):
 		if isinstance(selector, CardType):
 			return entity.type == selector
 		elif isinstance(selector, Race):
 			return getattr(entity, "race", Race.INVALID) == selector
+		elif isinstance(selector, Hostility):
+			return getattr(entity, "controller", 0) == selector
 		raise NotImplementedError(selector)
 
-	def eval(self, entities):
+	def eval(self, origin, entities):
 		ret = []
 		for entity in entities:
 			for selector in self.selectors:
-				if self._eval_selector(selector, entity):
+				if self._eval_selector(selector, origin, entity):
 					ret.append(entity)
 					break
 		return ret
