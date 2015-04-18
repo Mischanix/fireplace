@@ -2,7 +2,7 @@
 Targeting logic
 """
 
-from .enums import CardType, PlayReq
+from .enums import CardType, Race, PlayReq
 
 
 # Requirements-based targeting
@@ -74,3 +74,30 @@ def isValidTarget(self, target, requirements=None):
 			if not self.enraged:
 				return False
 	return True
+
+
+class Selector:
+	def __init__(self, *args):
+		self.selectors = []
+		for arg in args:
+			self.selectors.append(arg)
+
+	def __or__(self, selector):
+		self.selectors += selector.selectors
+		return self
+
+	def _eval_selector(self, selector, entity):
+		if isinstance(selector, CardType):
+			return entity.type == selector
+		elif isinstance(selector, Race):
+			return getattr(entity, "race", Race.INVALID) == selector
+		raise NotImplementedError(selector)
+
+	def eval(self, entities):
+		ret = []
+		for entity in entities:
+			for selector in self.selectors:
+				if self._eval_selector(selector, entity):
+					ret.append(entity)
+					break
+		return ret
