@@ -51,6 +51,22 @@ class Game(Entity):
 	def liveEntities(self):
 		return chain(self.player1.liveEntities, self.player2.liveEntities)
 
+	def select(self, selector, origin):
+		"""
+		Apply \a selector to the game with \a origin as the source.
+		The selector must filter on Zone.HAND, DECK, or PLAY.
+		"""
+		zone = selector.zone()
+		if zone == Zone.HAND:
+			return selector.eval(origin, self.hands)
+		elif zone == Zone.DECK:
+			return selector.eval(origin, self.decks)
+		elif zone == Zone.PLAY:
+			return selector.eval(origin, self.liveEntities)
+		else:
+			# selectors aren't intended to be used with other zones
+			raise RuntimeError("No Zone specified in selector")
+
 	def action(self, type, *args):
 		self.manager.action(type, *args)
 		if type == PowSubType.ATTACK:

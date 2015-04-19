@@ -30,6 +30,9 @@ class CardType(IntEnum):
 	TOKEN = 9
 	HERO_POWER = 10
 
+	def test(self, entity, origin):
+		return self == entity.type
+
 
 class Faction(IntEnum):
 	INVALID = 0
@@ -67,6 +70,9 @@ class Race(IntEnum):
 
 	# Alias for PET
 	BEAST = 20
+
+	def test(self, entity, origin):
+		return self == getattr(entity, 'race', Race.INVALID)
 
 
 class GameTag(IntEnum):
@@ -327,3 +333,6 @@ class Zone(IntEnum):
 	REMOVEDFROMGAME = 5
 	SETASIDE = 6
 	SECRET = 7
+
+	def test(self, entity, origin):
+		return self == getattr(entity, 'zone', Zone.INVALID)
