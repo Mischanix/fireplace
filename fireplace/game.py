@@ -59,6 +59,10 @@ class Game(Entity):
 		return CardList(chain(self.entities, self.hands, self.decks))
 
 	@property
+	def allEntities(self):
+		return chain(self.entities, self.hands, self.decks)
+
+	@property
 	def entities(self):
 		return CardList(chain([self], self.player1.entities, self.player2.entities))
 
