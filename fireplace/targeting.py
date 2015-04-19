@@ -2,6 +2,7 @@
 Targeting logic
 """
 
+import random
 from enum import IntEnum
 from .enums import Affiliation, CardType, PlayReq, Race, Zone
 
@@ -89,6 +90,28 @@ class Selector:
 		def __init__(self, selector, stack):
 			pass
 
+	class MergeFilter:
+		"""
+		Signals the start of a merge: the following commands define the filter
+		to be passed after Merge
+		"""
+		def __init__(self, selector, stack):
+			pass
+
+	class Merge:
+		"""
+		Ops between Merge and Unmerge are classes with merge() methods
+		    def merge(self, selector, entities)
+		that operate on the full collection specified by the ops between
+		MergeFilter and Merge.
+		"""
+		def __init__(self, selector, stack):
+			pass
+
+	class Unmerge:
+		def __init__(self, selector, stack):
+			pass
+
 	def __init__(self, *args):
 		self.program = []
 		first = True
@@ -132,19 +155,64 @@ class Selector:
 		return result
 
 	def eval(self, entities, source):
-		return [e for e in entities if self.test(e, source)]
+		print(repr(self))
+		self.n = 0
+		self.opc = 0 # outer program counter
+		result = []
+		while self.opc < len(self.program):
+			if self.program[self.opc] != Selector.MergeFilter:
+				result += [e for e in entities if self.test(e, source)]
+				self.opc = self.pc
+				if self.opc >= len(self.program):
+					break
+			else:
+				self.opc += 1
+			# handle merge step:
+			merge_input = [e for e in entities if self.test(e, source)]
+			self.opc = self.pc
+			merge_output = []
+			while self.opc < len(self.program):
+				op = self.program[self.opc]
+				self.opc += 1
+				if op == Selector.Unmerge:
+					break
+				merge_output += op.merge(self, merge_input)
+			print("merge_output = {}".format(merge_output))
+			negated = False
+			combined = False
+			while self.opc < len(self.program):
+				# special handling for operators on merged collections:
+				op = self.program[self.opc]
+				if op == Selector._or:
+					result += [e for e in merge_output]
+					combined = True
+				elif op == Selector._and:
+					result = [e for e in result if (e in merge_output) != negated]
+					combined = True
+				elif op == Selector._not:
+					negated = not negated
+				else:
+					break
+				self.opc += 1
+			if not combined:
+				# assume or
+				result += merge_output
+		return result
 
 	def test(self, entity, source):
 		stack = []
-		self.pc = 0
+		self.pc = self.opc # program counter
 		while self.pc < len(self.program):
 			op = self.program[self.pc]
 			self.pc += 1
+			if op == Selector.Merge or op == Selector.MergeFilter:
+				break
 			if callable(op):
 				op(self, stack)
 			else:
 				val = type(op).test(op, entity, source)
 				stack.append(val)
+		self.n += 1
 		return stack[-1]
 
 	# if stack has false, skips to the appropriate BreakLabel
@@ -185,17 +253,53 @@ class Selector:
 
 
 class SelfSelector(Selector):
-	...
+	class IsSelf:
+		def test(self, entity, source):
+			return entity is source
+
+	def __init__(self):
+		self.program = [self.IsSelf()]
+
+	def eval(self, entities, source):
+		return [source]
+
+	def test(self, entity, source):
+		return entity is source
 
 SELF = SelfSelector()
 
 
 class TargetSelector(Selector):
-	...
+	class IsTarget:
+		def test(self, entity, source):
+			return entity is source.target
+
+	def __init__(self):
+		self.program = [self.IsTarget()]
+
+	def eval(self, entities, source):
+		return [source.target]
+
+	def test(self, entity, source):
+		return entity is source.target
+
+TARGET = TargetSelector()
 
 
 class AdjacentSelector(Selector):
-	...
+	class SelectAdjacent:
+		def merge(self, selector, entities):
+			result = []
+			for e in entities:
+				result.extend(e.adjacentMinions)
+			return result
+
+	def __init__(self, selector):
+		self.program = [Selector.MergeFilter]
+		self.program.extend(selector.program)
+		self.program.append(Selector.Merge)
+		self.program.append(self.SelectAdjacent())
+		self.program.append(Selector.Unmerge)
 
 
 class FilterSelector(Selector):
@@ -205,26 +309,41 @@ class FilterSelector(Selector):
 FILTER = FilterSelector
 
 
-class ZoneSelector(Selector):
-	def __call__(self, *args):
-		return self
-
-
 class RandomSelector(Selector):
-	def __call__(self, *args):
-		return self
+	class SelectRandom:
+		def __init__(self, times):
+			self.times = times
+
+		def merge(self, selector, entities):
+			return random.sample(entities, min(len(entities), self.times))
+
+	def __init__(self, selector):
+		self.random = self.SelectRandom(1)
+		self.selector = selector
+		self.program = [Selector.MergeFilter]
+		self.program.extend(selector.program)
+		self.program.append(Selector.Merge)
+		self.program.append(self.random)
+		self.program.append(Selector.Unmerge)
 
 	def __mul__(self, other):
-		return self
+		result = RandomSelector(self.selector)
+		result.random.times *= other
+		return result
+
 
 RANDOM = RandomSelector
 
 
 SELF = SelfSelector()
 TARGET = TargetSelector()
-IN_PLAY = ZoneSelector(Zone.PLAY)
-IN_DECK = ZoneSelector(Zone.DECK)
-IN_HAND = ZoneSelector(Zone.HAND)
+
+
+IN_PLAY = Selector(Zone.PLAY)
+IN_DECK = Selector(Zone.DECK)
+IN_HAND = Selector(Zone.HAND)
+HIDDEN = Selector(Zone.SECRET)
+
 SELF_ADJACENT = AdjacentSelector(SELF)
 TARGET_ADJACENT = AdjacentSelector(TARGET)
 
@@ -241,7 +360,7 @@ MINION = Selector(CardType.MINION)
 CHARACTER = MINION | HERO
 WEAPON = Selector(CardType.WEAPON)
 SPELL = Selector(CardType.SPELL)
-SECRET = SPELL # TODO
+SECRET = Selector(CardType.SECRET)
 
 DEMON = Selector(Race.DEMON)
 MECH = Selector(Race.MECHANICAL)
@@ -249,26 +368,27 @@ MURLOC = Selector(Race.MURLOC)
 PIRATE = Selector(Race.PIRATE)
 TOTEM = Selector(Race.TOTEM)
 
-CONTROLLER_HAND = IN_HAND(FRIENDLY)
-CONTROLLER_DECK = IN_DECK(FRIENDLY)
-OPPONENT_HAND = IN_HAND(ENEMY)
-OPPONENT_DECK = IN_DECK(OPPONENT)
+CONTROLLER_HAND = IN_HAND + FRIENDLY
+CONTROLLER_DECK = IN_DECK + FRIENDLY
+OPPONENT_HAND = IN_HAND + ENEMY
+OPPONENT_DECK = IN_DECK + OPPONENT
 
-ALL_HEROES = IN_PLAY(HERO)
-ALL_MINIONS = IN_PLAY(MINION)
-ALL_CHARACTERS = IN_PLAY(CHARACTER)
-ALL_WEAPONS = IN_PLAY(WEAPON)
-ALL_SECRETS = IN_PLAY(SECRET)
+ALL_HEROES = IN_PLAY + HERO
+ALL_MINIONS = IN_PLAY + MINION
+ALL_CHARACTERS = IN_PLAY + CHARACTER
+ALL_WEAPONS = IN_PLAY + WEAPON
+ALL_SECRETS = HIDDEN + SECRET
 
-FRIENDLY_HERO = IN_PLAY(FRIENDLY + HERO)
-FRIENDLY_MINIONS = IN_PLAY(FRIENDLY + MINION)
-FRIENDLY_CHARACTERS = IN_PLAY(FRIENDLY + CHARACTER)
-FRIENDLY_WEAPON = IN_PLAY(FRIENDLY + WEAPON)
-ENEMY_HERO = IN_PLAY(ENEMY + HERO)
-ENEMY_MINIONS = IN_PLAY(ENEMY + MINION)
-ENEMY_CHARACTERS = IN_PLAY(ENEMY + CHARACTER)
-ENEMY_WEAPON = IN_PLAY(ENEMY + WEAPON)
-ENEMY_SECRETS = ...
+FRIENDLY_HERO = IN_PLAY + FRIENDLY + HERO
+FRIENDLY_MINIONS = IN_PLAY + FRIENDLY + MINION
+FRIENDLY_CHARACTERS = IN_PLAY + FRIENDLY + CHARACTER
+FRIENDLY_WEAPON = IN_PLAY + FRIENDLY + WEAPON
+FRIENDLY_SECRETS = HIDDEN + FRIENDLY + SECRET
+ENEMY_HERO = IN_PLAY + ENEMY + HERO
+ENEMY_MINIONS = IN_PLAY + ENEMY + MINION
+ENEMY_CHARACTERS = IN_PLAY + ENEMY + CHARACTER
+ENEMY_WEAPON = IN_PLAY + ENEMY + WEAPON
+ENEMY_SECRETS = HIDDEN + ENEMY + SECRET
 
 RANDOM_MINION = RANDOM(ALL_MINIONS)
 RANDOM_CHARACTER = RANDOM(ALL_CHARACTERS)
@@ -277,4 +397,4 @@ RANDOM_FRIENDLY_CHARACTER = RANDOM(FRIENDLY_CHARACTERS)
 RANDOM_ENEMY_MINION = RANDOM(ENEMY_MINIONS)
 RANDOM_ENEMY_CHARACTER = RANDOM(ENEMY_CHARACTERS)
 
-DAMAGED_CHARACTERS = ...
+DAMAGED_CHARACTERS = ALL_CHARACTERS # TODO
