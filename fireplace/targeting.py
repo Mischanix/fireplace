@@ -2,7 +2,8 @@
 Targeting logic
 """
 
-from .enums import CardType, PlayReq
+from enum import IntEnum
+from .enums import Affiliation, CardType, PlayReq, Race, Zone
 
 
 # Requirements-based targeting
@@ -181,3 +182,99 @@ class Selector:
 
 	def _not(self, stack):
 		stack.append(not stack.pop())
+
+
+class SelfSelector(Selector):
+	...
+
+SELF = SelfSelector()
+
+
+class TargetSelector(Selector):
+	...
+
+
+class AdjacentSelector(Selector):
+	...
+
+
+class FilterSelector(Selector):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args)
+
+FILTER = FilterSelector
+
+
+class ZoneSelector(Selector):
+	def __call__(self, *args):
+		return self
+
+
+class RandomSelector(Selector):
+	def __call__(self, *args):
+		return self
+
+	def __mul__(self, other):
+		return self
+
+RANDOM = RandomSelector
+
+
+SELF = SelfSelector()
+TARGET = TargetSelector()
+IN_PLAY = ZoneSelector(Zone.PLAY)
+IN_DECK = ZoneSelector(Zone.DECK)
+IN_HAND = ZoneSelector(Zone.HAND)
+SELF_ADJACENT = AdjacentSelector(SELF)
+TARGET_ADJACENT = AdjacentSelector(TARGET)
+
+FRIENDLY = Selector(Affiliation.FRIENDLY)
+ENEMY = Selector(Affiliation.HOSTILE)
+CONTROLLED_BY_TARGET = Selector(Affiliation.TARGET)
+
+ALL_PLAYERS = PLAYER = Selector(CardType.PLAYER)
+CONTROLLER = ALL_PLAYERS + FRIENDLY
+OPPONENT = ALL_PLAYERS + ENEMY
+
+HERO = Selector(CardType.HERO)
+MINION = Selector(CardType.MINION)
+CHARACTER = MINION | HERO
+WEAPON = Selector(CardType.WEAPON)
+SPELL = Selector(CardType.SPELL)
+SECRET = SPELL # TODO
+
+DEMON = Selector(Race.DEMON)
+MECH = Selector(Race.MECHANICAL)
+MURLOC = Selector(Race.MURLOC)
+PIRATE = Selector(Race.PIRATE)
+TOTEM = Selector(Race.TOTEM)
+
+CONTROLLER_HAND = IN_HAND(FRIENDLY)
+CONTROLLER_DECK = IN_DECK(FRIENDLY)
+OPPONENT_HAND = IN_HAND(ENEMY)
+OPPONENT_DECK = IN_DECK(OPPONENT)
+
+ALL_HEROES = IN_PLAY(HERO)
+ALL_MINIONS = IN_PLAY(MINION)
+ALL_CHARACTERS = IN_PLAY(CHARACTER)
+ALL_WEAPONS = IN_PLAY(WEAPON)
+ALL_SECRETS = IN_PLAY(SECRET)
+
+FRIENDLY_HERO = IN_PLAY(FRIENDLY + HERO)
+FRIENDLY_MINIONS = IN_PLAY(FRIENDLY + MINION)
+FRIENDLY_CHARACTERS = IN_PLAY(FRIENDLY + CHARACTER)
+FRIENDLY_WEAPON = IN_PLAY(FRIENDLY + WEAPON)
+ENEMY_HERO = IN_PLAY(ENEMY + HERO)
+ENEMY_MINIONS = IN_PLAY(ENEMY + MINION)
+ENEMY_CHARACTERS = IN_PLAY(ENEMY + CHARACTER)
+ENEMY_WEAPON = IN_PLAY(ENEMY + WEAPON)
+ENEMY_SECRETS = ...
+
+RANDOM_MINION = RANDOM(ALL_MINIONS)
+RANDOM_CHARACTER = RANDOM(ALL_CHARACTERS)
+RANDOM_FRIENDLY_MINION = RANDOM(FRIENDLY_MINIONS)
+RANDOM_FRIENDLY_CHARACTER = RANDOM(FRIENDLY_CHARACTERS)
+RANDOM_ENEMY_MINION = RANDOM(ENEMY_MINIONS)
+RANDOM_ENEMY_CHARACTER = RANDOM(ENEMY_CHARACTERS)
+
+DAMAGED_CHARACTERS = ...
