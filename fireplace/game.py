@@ -73,6 +73,9 @@ class Game(Entity):
 	def filter(self, *args, **kwargs):
 		return self.allEntities.filter(*args, **kwargs)
 
+	def filter(self, *args, **kwargs):
+		return self.allEntities.filter(*args, **kwargs)
+
 	def action(self, type, *args):
 		self.manager.action(type, *args)
 		if type == PowSubType.ATTACK:
