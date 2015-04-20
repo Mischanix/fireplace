@@ -5,6 +5,7 @@ Targeting logic
 import random
 from enum import IntEnum
 from .enums import Affiliation, CardType, PlayReq, Race, Zone
+from .utils import CardList
 
 
 # Requirements-based targeting
@@ -85,18 +86,12 @@ class Selector:
 	    def test(self, entity)
 	returning a boolean, true if entity matches the condition.
 	"""
-	class BreakLabel:
-		# no-op:
-		def __init__(self, selector, stack):
-			pass
-
 	class MergeFilter:
 		"""
 		Signals the start of a merge: the following commands define the filter
 		to be passed after Merge
 		"""
-		def __init__(self, selector, stack):
-			pass
+		pass
 
 	class Merge:
 		"""
@@ -105,12 +100,10 @@ class Selector:
 		that operate on the full collection specified by the ops between
 		MergeFilter and Merge.
 		"""
-		def __init__(self, selector, stack):
-			pass
+		pass
 
 	class Unmerge:
-		def __init__(self, selector, stack):
-			pass
+		pass
 
 	def __init__(self, *args):
 		self.program = []
@@ -131,32 +124,29 @@ class Selector:
 				name = op.name
 			else:
 				name = repr(op)
-			# breaks are just optimization -- filter them
-			if "break" not in name.lower():
-				prog.append(name.lstrip("_"))
+			prog.append(name.lstrip("_"))
 		return "<{}: {}>".format(self.__class__.__name__, " ".join(prog))
 
 	def __or__(self, other):
 		result = Selector()
-		result.program = self.program + [Selector._break_true] + other.program
-		result.program += [Selector._or, Selector.BreakLabel]
+		result.program = self.program + other.program
+		result.program.append(Selector._or)
 		return result
 
 	def __add__(self, other):
 		result = Selector()
-		result.program = self.program + [Selector._break_false] + other.program
-		result.program += [Selector._and, Selector.BreakLabel]
+		result.program = self.program + other.program
+		result.program.append(Selector._and)
 		return result
 
 	def __sub__(self, other):
 		result = Selector()
-		result.program = self.program + [Selector._break_false] + other.program
-		result.program += [Selector._not, Selector._and, Selector.BreakLabel]
+		result.program = self.program + other.program
+		result.program += [Selector._not, Selector._and]
 		return result
 
 	def eval(self, entities, source):
 		print(repr(self))
-		self.n = 0
 		self.opc = 0 # outer program counter
 		result = []
 		while self.opc < len(self.program):
@@ -168,16 +158,16 @@ class Selector:
 			else:
 				self.opc += 1
 			# handle merge step:
-			merge_input = [e for e in entities if self.test(e, source)]
+			merge_input = CardList([e for e in entities if self.test(e, source)])
+			print("merge_input = {}".format(merge_input))
 			self.opc = self.pc
-			merge_output = []
+			merge_output = CardList()
 			while self.opc < len(self.program):
 				op = self.program[self.opc]
 				self.opc += 1
 				if op == Selector.Unmerge:
 					break
 				merge_output += op.merge(self, merge_input)
-			print("merge_output = {}".format(merge_output))
 			negated = False
 			combined = False
 			while self.opc < len(self.program):
@@ -197,6 +187,7 @@ class Selector:
 			if not combined:
 				# assume or
 				result += merge_output
+		print("result = {}".format(result))
 		return result
 
 	def test(self, entity, source):
@@ -212,30 +203,7 @@ class Selector:
 			else:
 				val = type(op).test(op, entity, source)
 				stack.append(val)
-		self.n += 1
 		return stack[-1]
-
-	# if stack has false, skips to the appropriate BreakLabel
-	def _break_false(self, stack):
-		if stack[-1] == False:
-			self._break(stack)
-
-	# same as _break_false, but if stack has true
-	def _break_true(self, stack):
-		if stack[-1] == True:
-			self._break(stack)
-
-	def _break(self, stack):
-		depth = 1
-		while self.pc < len(self.program):
-			op = self.program[self.pc]
-			if op == Selector._break_true or op == Selector._break_false:
-				depth += 1
-			if op == self.BreakLabel:
-				depth -= 1
-			self.pc += 1
-			if depth == 0:
-				break
 
 	# boolean ops:
 	def _and(self, stack):
@@ -328,7 +296,7 @@ class RandomSelector(Selector):
 
 	def __mul__(self, other):
 		result = RandomSelector(self.selector)
-		result.random.times *= other
+		result.random.times = self.random.times * other
 		return result
 
 
